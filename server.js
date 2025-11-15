@@ -11,8 +11,9 @@ app.get("/", (req, res) => {
   res.sendFile(path.join(__dirname, "index.html"));
 });
 
-let waitingUser = null; // socket waiting for a partner
-const partners = new Map(); // socket.id -> partnerSocket.id
+let waitingUser = null;               // socket waiting for partner
+const partners = new Map();           // socket.id -> partnerSocket.id
+const profiles = new Map();           // socket.id -> { age, gender, country }
 
 function pairUsers(socketA, socketB) {
   if (!socketA || !socketB) return;
@@ -20,12 +21,30 @@ function pairUsers(socketA, socketB) {
   partners.set(socketA.id, socketB.id);
   partners.set(socketB.id, socketA.id);
 
-  socketA.emit("paired", { message: "You are now connected to a stranger." });
-  socketB.emit("paired", { message: "You are now connected to a stranger." });
+  const profileA = profiles.get(socketA.id) || null;
+  const profileB = profiles.get(socketB.id) || null;
+
+  socketA.emit("paired", {
+    message: "You are now connected to a stranger.",
+    partnerProfile: profileB,
+  });
+  socketB.emit("paired", {
+    message: "You are now connected to a stranger.",
+    partnerProfile: profileA,
+  });
 }
 
 io.on("connection", (socket) => {
   console.log("User connected:", socket.id);
+
+  // profile data from client
+  socket.on("setProfile", (profile) => {
+    profiles.set(socket.id, {
+      age: profile.age || "",
+      gender: profile.gender || "",
+      country: profile.country || "",
+    });
+  });
 
   socket.on("findPartner", () => {
     if (!waitingUser || waitingUser.id === socket.id) {
@@ -68,6 +87,7 @@ io.on("connection", (socket) => {
         });
       }
       partners.delete(partnerId);
+      profiles.delete(partnerId);
       partners.delete(socket.id);
     }
   });
@@ -82,6 +102,7 @@ io.on("connection", (socket) => {
         });
       }
       partners.delete(partnerId);
+      profiles.delete(partnerId);
       partners.delete(socket.id);
     }
 
@@ -111,8 +132,11 @@ io.on("connection", (socket) => {
         });
       }
       partners.delete(partnerId);
-      partners.delete(socket.id);
+      profiles.delete(partnerId);
     }
+
+    profiles.delete(socket.id);
+    partners.delete(socket.id);
   });
 });
 
